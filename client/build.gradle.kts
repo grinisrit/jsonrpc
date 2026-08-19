@@ -1,4 +1,5 @@
 import com.vanniktech.maven.publish.SonatypeHost
+import org.gradle.plugins.signing.SigningExtension
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -7,7 +8,7 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-group = "me.y9san9.jsonrpc"
+group = "io.github.mzd00.jsonrpc"
 
 version = libs.versions.jsonrpc.get()
 
@@ -36,18 +37,19 @@ dependencies {
 }
 
 mavenPublishing {
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
 
     pom {
-        name = "jsonrpc"
-        description = "Json RPC implementation in pure Kotlin"
-        url = "https://github.com/y9san9/jsonrpc"
+        name = "jsonrpc-client"
+        description = "JSON-RPC implementation in pure Kotlin"
+        url = "https://github.com/grinisrit/jsonrpc"
 
         licenses {
             license {
                 name = "MIT"
                 distribution = "repo"
-                url = "https://github.com/y9san9/jsonrpc/blob/main/LICENSE.md"
+                url =
+                    "https://github.com/grinisrit/jsonrpc/blob/main/LICENSE.md"
             }
         }
 
@@ -60,11 +62,22 @@ mavenPublishing {
         }
 
         scm {
-            connection = "scm:git:ssh://github.com/y9san9/jsonrpc.git"
-            developerConnection = "scm:git:ssh://github.com/y9san9/jsonrpc.git"
-            url = "https://github.com/y9san9/jsonrpc"
+            connection = "scm:git:https://github.com/grinisrit/jsonrpc.git"
+            developerConnection =
+                "scm:git:ssh://git@github.com/grinisrit/jsonrpc.git"
+            url = "https://github.com/grinisrit/jsonrpc"
         }
     }
 
     signAllPublications()
+}
+
+if (
+    providers.gradleProperty("useGpgCmd")
+        .map(String::toBoolean)
+        .getOrElse(false)
+) {
+    configure<SigningExtension> {
+        useGpgCmd()
+    }
 }

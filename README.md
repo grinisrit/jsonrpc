@@ -34,7 +34,7 @@ ways:
 
 ```kotlin
 dependencies {
-    implementation("me.y9san9.jsonrpc:ktor-client:$version")
+    implementation("io.github.mzd00.jsonrpc:ktor-client:$version")
 }
 ```
 
@@ -43,10 +43,15 @@ dependencies {
 jsonrpc = "$version"
 
 [libraries]
-jsonrpc = { module = "me.y9san9.jsonrpc", version.ref = "jsonrpc" }
+jsonrpc = { module = "io.github.mzd00.jsonrpc:ktor-client", version.ref = "jsonrpc" }
 ```
 
 `$version` should be the same as the last version in releases section.
+
+## Publishing
+
+Maintainer instructions for signing and publishing releases are in
+[docs/Publishing.md](docs/Publishing.md).
 
 ## Server-Client
 

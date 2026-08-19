@@ -48,6 +48,11 @@ jsonrpc = { module = "me.y9san9.jsonrpc", version.ref = "jsonrpc" }
 
 `$version` should be the same as the last version in releases section.
 
+## Publishing
+
+Maintainer instructions for signing and publishing releases are in
+[docs/Publishing.md](docs/Publishing.md).
+
 ## Server-Client
 
 TODO: at the moment only client behaviour is supported. Since I myself

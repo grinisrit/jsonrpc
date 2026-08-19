@@ -1,4 +1,5 @@
 import com.vanniktech.maven.publish.SonatypeHost
+import org.gradle.plugins.signing.SigningExtension
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -64,4 +65,14 @@ mavenPublishing {
     }
 
     signAllPublications()
+}
+
+if (
+    providers.gradleProperty("useGpgCmd")
+        .map(String::toBoolean)
+        .getOrElse(false)
+) {
+    configure<SigningExtension> {
+        useGpgCmd()
+    }
 }

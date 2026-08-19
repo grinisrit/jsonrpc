@@ -4,6 +4,13 @@ The `client` and `ktor-client` modules are published to Maven Central. Maven
 Central releases are immutable, so update and verify the project version before
 publishing. Never reuse a version that has already been released.
 
+The published coordinates are:
+
+```text
+io.github.mzd00.jsonrpc:client:<version>
+io.github.mzd00.jsonrpc:ktor-client:<version>
+```
+
 ## Requirements
 
 - Access to the Maven Central namespace used by the project.

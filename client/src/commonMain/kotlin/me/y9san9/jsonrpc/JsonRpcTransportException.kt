@@ -2,13 +2,14 @@ package me.y9san9.jsonrpc
 
 /**
  * This is the exception that is thrown when transport disconnects due to
- * external circumstances. It may be useful if you want to setup client
- * reconnection.
+ * external circumstances or when JSON-RPC can no longer safely continue using
+ * it, for example after a request timeout. It may be useful if you want to
+ * setup client reconnection.
  *
- * It is exposed as public only is you want to filter it out. Do not throw it
- * unless you implement a custom transport adapter.
+ * Custom transport adapters should throw this exception for transport
+ * failures so connectors can classify them consistently.
  */
-public class JsonRpcTransportException(
+public open class JsonRpcTransportException(
     message: String? = null,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)

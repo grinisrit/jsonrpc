@@ -1,14 +1,18 @@
 package me.y9san9.jsonrpc
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart.UNDISPATCHED
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -117,10 +121,19 @@ private constructor(
             },
         )
         return try {
-            transport.send(json)
-            registrations.map { registration ->
-                registration.deferred
-            }.awaitAll()
+            val responses = withTimeoutOrNull(config.requestTimeout) {
+                transport.send(json)
+                registrations.map { registration ->
+                    registration.deferred
+                }.awaitAll()
+            }
+            if (responses == null) {
+                throw JsonRpcRequestTimeoutException(config.requestTimeout)
+            }
+            responses
+        } catch (failure: JsonRpcTransportException) {
+            responseEngine.fail(failure)
+            throw failure
         } finally {
             withContext(NonCancellable) {
                 responseEngine.unregister(registrations)
@@ -299,23 +312,41 @@ private constructor(
                             )
                         requestEngine.start()
 
-                        val result = coroutineScope {
-                            // userScope awaits all the jobs before cleaning
-                            // up backgroundScope.
-                            val userScope = this
-                            val rpc =
-                                JsonRpc(
-                                    backgroundScope = backgroundScope,
-                                    scope = userScope,
-                                    config = config,
-                                    transport = transport,
-                                    responseEngine = responseEngine,
-                                    requestEngine = requestEngine,
-                                    incomingEngine = incomingEngine,
-                                )
-                            block(rpc)
+                        val result = try {
+                            coroutineScope {
+                                val user = async(start = UNDISPATCHED) {
+                                    // This scope awaits jobs launched through
+                                    // rpc.scope before completing.
+                                    val userScope = this
+                                    val rpc = JsonRpc(
+                                        backgroundScope = backgroundScope,
+                                        scope = userScope,
+                                        config = config,
+                                        transport = transport,
+                                        responseEngine = responseEngine,
+                                        requestEngine = requestEngine,
+                                        incomingEngine = incomingEngine,
+                                    )
+                                    block(rpc)
+                                }
+                                val failureMonitor = launch(
+                                    start = UNDISPATCHED,
+                                ) {
+                                    throw responseEngine.awaitFailure()
+                                }
+                                try {
+                                    val value = user.await()
+                                    val failure =
+                                        responseEngine.failureOrNull()
+                                    if (failure != null) throw failure
+                                    value
+                                } finally {
+                                    failureMonitor.cancel()
+                                }
+                            }
+                        } finally {
+                            backgroundScope.cancel()
                         }
-                        backgroundScope.cancel()
                         result
                     }
                 }

@@ -18,6 +18,9 @@ internal class JsonRpcResponseEngine(
     private val backgroundScope: CoroutineScope,
     private val incomingEngine: JsonRpcIncomingEngine,
 ) {
+    private val failureSignal =
+        CompletableDeferred<JsonRpcTransportException>()
+    private var terminalFailure: JsonRpcTransportException? = null
     private val pending =
         mutableMapOf<
             JsonRpcResponseId,
@@ -52,6 +55,7 @@ internal class JsonRpcResponseEngine(
         }
 
         mutex.withLock {
+            terminalFailure?.let { failure -> throw failure }
             val alreadyPending = registrations.firstOrNull { registration ->
                 registration.id in pending
             }
@@ -65,6 +69,24 @@ internal class JsonRpcResponseEngine(
 
         return registrations
     }
+
+    suspend fun fail(failure: JsonRpcTransportException) {
+        val deferreds = mutex.withLock {
+            if (terminalFailure != null) return
+            terminalFailure = failure
+            pending.values.toList().also { pending.clear() }
+        }
+        for (deferred in deferreds) {
+            deferred.completeExceptionally(failure)
+        }
+        failureSignal.complete(failure)
+    }
+
+    suspend fun awaitFailure(): JsonRpcTransportException =
+        failureSignal.await()
+
+    suspend fun failureOrNull(): JsonRpcTransportException? =
+        mutex.withLock { terminalFailure }
 
     suspend fun unregister(registrations: List<JsonRpcPendingResponse>) {
         val removed = mutex.withLock {

@@ -48,6 +48,27 @@ jsonrpc = { module = "io.github.mzd00.jsonrpc:ktor-client", version.ref = "jsonr
 
 `$version` should be the same as the last version in releases section.
 
+## Request timeout
+
+Requests have a finite 30-second deadline covering transport send and response
+receipt. A timeout throws `JsonRpcRequestTimeoutException`, permanently fails
+the connection, and is classified by the Ktor adapter as a transport failure
+even if the first timeout is caught inside the connection block. Use an
+explicit config to choose another positive finite duration:
+
+```kotlin
+val config = JsonRpcConfig(
+    side = JsonRpcSide.Client,
+    requestTimeout = 2.minutes,
+)
+val rpc = JsonRpc.websocket("wss://example.org", config)
+```
+
+## Compatibility policy
+
+This fork is an internal library. Binary compatibility is not guaranteed
+between releases; consumers must be recompiled when upgrading.
+
 ## Publishing
 
 Maintainer instructions for signing and publishing releases are in

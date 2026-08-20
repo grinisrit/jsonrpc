@@ -2,12 +2,14 @@ package me.y9san9.jsonrpc
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.Closeable
@@ -16,8 +18,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 internal class JsonRpcResponseRegistrationTest {
     @Test
@@ -110,16 +115,53 @@ internal class JsonRpcResponseRegistrationTest {
         assertIs<JsonRpc.Result.Success<JsonRpcResponse>>(result)
     }
 
+    @Test
+    fun `timeout poisons connection even when caller catches it`(): Unit =
+        runBlocking {
+            val transport = TestTransport(mode = SendMode.Ignore)
+
+            val result = connector(
+                transport = transport,
+                requestTimeout = 50.milliseconds,
+            ).connect {
+                val failure = assertFailsWith<
+                    JsonRpcRequestTimeoutException,
+                    > {
+                    execute(request())
+                }
+                assertEquals(50.milliseconds, failure.timeout)
+
+                withContext(NonCancellable) {
+                    transport.enqueueResponse(id = 1, result = "stale")
+                    val retryFailure = assertFailsWith<
+                        JsonRpcRequestTimeoutException,
+                        > {
+                        execute(request())
+                    }
+                    assertEquals(failure, retryFailure)
+                }
+            }
+
+            val connectionFailure =
+                assertIs<JsonRpc.Result.TransportFailure>(result)
+            assertIs<JsonRpcRequestTimeoutException>(connectionFailure.cause)
+        }
+
     private fun request(id: Long = 1): JsonRpcMethod = JsonRpcMethod(
         id = JsonRpcRequestId.Long(id),
         method = JsonRpcMethodName("test"),
     )
 
-    private fun connector(transport: TestTransport): JsonRpc.Connector =
-        JsonRpc.Connector(
-            transport = TestTransportConnector(transport),
-            config = JsonRpcConfig(side = JsonRpcSide.Client),
-        )
+    private fun connector(
+        transport: TestTransport,
+        requestTimeout: Duration = 1_000.milliseconds,
+    ): JsonRpc.Connector = JsonRpc.Connector(
+        transport = TestTransportConnector(transport),
+        config = JsonRpcConfig(
+            side = JsonRpcSide.Client,
+            requestTimeout = requestTimeout,
+        ),
+    )
 }
 
 private enum class SendMode {
@@ -132,8 +174,14 @@ private class TestTransportConnector(private val transport: TestTransport) :
     JsonRpcTransport.Connector {
     override suspend fun <T> connect(
         block: suspend JsonRpcTransport.() -> T,
-    ): JsonRpcTransport.Result<T> =
+    ): JsonRpcTransport.Result<T> = try {
         JsonRpcTransport.Result.Success(transport.block())
+    } catch (exception: JsonRpcTransportException) {
+        JsonRpcTransport.Result.TransportFailure(
+            message = exception.message,
+            cause = exception,
+        )
+    }
 }
 
 private class TestTransport(@Volatile var mode: SendMode = SendMode.Respond) :
@@ -177,6 +225,14 @@ private class TestTransport(@Volatile var mode: SendMode = SendMode.Respond) :
 
     suspend fun awaitSend() {
         sends.receive()
+    }
+
+    fun enqueueResponse(id: Long, result: String) {
+        incoming.trySend(
+            IncomingMessage(
+                data = """{"jsonrpc":"2.0","id":$id,"result":"$result"}""",
+            ),
+        ).getOrThrow()
     }
 }
 

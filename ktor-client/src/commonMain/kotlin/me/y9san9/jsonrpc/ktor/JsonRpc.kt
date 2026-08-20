@@ -16,6 +16,27 @@ public fun JsonRpc.Companion.websocket(
     json: Json = Json,
     request: HttpRequestBuilder.() -> Unit = {},
 ): JsonRpc.Connector {
+    val config = JsonRpcConfig(json = json, side = JsonRpcSide.Client)
+    return websocket(
+        url = url,
+        config = config,
+        httpClient = httpClient,
+        pingIntervalMillis = pingIntervalMillis,
+        request = request,
+    )
+}
+
+/** Creates a jsonrpc connector using ktor-client and an explicit [config]. */
+public fun JsonRpc.Companion.websocket(
+    url: String,
+    config: JsonRpcConfig,
+    httpClient: HttpClient = HttpClient(CIO),
+    pingIntervalMillis: Long? = DEFAULT_PING_INTERVAL_MILLIS,
+    request: HttpRequestBuilder.() -> Unit = {},
+): JsonRpc.Connector {
+    require(config.side == JsonRpcSide.Client) {
+        "Ktor WebSocket connector requires client-side JSON-RPC config"
+    }
     val transport =
         KtorJsonRpcTransport.Connector(
             url = url,
@@ -23,6 +44,5 @@ public fun JsonRpc.Companion.websocket(
             pingIntervalMillis = pingIntervalMillis,
             request = request,
         )
-    val config = JsonRpcConfig(json = json, side = JsonRpcSide.Client)
     return JsonRpc.Connector(transport, config)
 }
